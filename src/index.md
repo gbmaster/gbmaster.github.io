@@ -5,5 +5,6 @@ gb_master's /dev/null
 
 # Blog posts
 
-[Interest revival.... Hello, again!](20120211_interest.html)
+* [Interest revival.... Hello, again!](20120211_interest.html)
+* [On the road of hiding… PEB, PE format handling and DLL loading homemade APIs - part 1](20120226_hiding1.html)
 
