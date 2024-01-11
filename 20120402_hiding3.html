@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>On the road of hiding... PEB, PE format handling and DLL loading homemade APIs - part 3 &mdash; gb_master's /dev/null</title>
+  </head>
+  <body>
+<h1>On the road of hiding... PEB, PE format handling and DLL loading homemade APIs - part 3</h1>
+
+<h2>02-04-2012, 20:30</h2>
+
+<p>It took me quite a lot to get all the code working and running and, even if there are some bugs yet to be solved, the code seems usable. So, here I go explaining the LoadLibrary part of this library: I won't go too much in details about how this thing work (even if I'll post here the link to the site I took the documentation from), but I'll write the interesting and problematic points I've faced in writing the code instead.</p>
+
+<p>Most of the documentation I needed to write this post is taken from <a href="http://www.joachim-bauch.de/tutorials/loading-a-dll-from-memory/">this</a> wonderful article written by Joachim Bauch: here is reported all the required information needed to handle the PE format when loading a module in memory. The PE loading process can be split in some main points:</p>
+
+<ul>
+<li>Opening the file</li>
+<li>Allocating enough space in memory, possibly at the image base address specified in the optional header</li>
+<li>Copy all the sections in memory</li>
+<li>If it hasn't been possible to allocate space at the specified base address, proceed with address relocation</li>
+<li>Resolve all the imports needed by the module</li>
+<li>Adequately protect the different sections</li>
+<li>Call the module entry point</li>
+</ul>
+
+<p>Maybe this list is a little bit scaring at the beginning, but it ain't so bad and meaningless after one starts writing the code for it.</p>
+
+<p><strong><em>Opening the file</em></strong></p>
+
+<p>This can be simply done by calling the CreateFile function with read permissions and then calling the CreateFileMapping and the MapViewOfFile APIs to open the file. Once the mapping is done, both handles can be closed.</p>
+
+<p><strong><em>Allocating the memory</em></strong></p>
+
+<p>By analyzing the ImageBase and the <em>SizeOfImage</em> fields of OptionalHeader, it is possible to discover the address where the module should be loaded and the size of the region required to store all the data. Here came the <strong>first</strong> problem. Almost all the re-implementations of the LoadLibrary function do this by using the VirtualAlloc function; however, there are some little big things called <em>shared sections</em> that would not work when using this method. A shared section is shared between all the processes allowing IPC via this area. I've solved this problem (for now, as I couldn't find a better approach) by mapping the file using the <em>MapViewOfFileEx</em> API, which is similar to the <em>MapViewOfFile</em> function, but it contains a new parameter called <em>lpBaseAddress</em>, stating at which address the mapping should be made.</p>
+
+<p>After doing this, the mapping handle can be closed.</p>
+
+<p><strong><em>Sections copy</em></strong></p>
+
+<p>The first thing to do is to copy the initial headers to the lpBaseAddress address: the size of the region of data to be copied is specified in</p>
+
+<pre><code>pNTHeader-&gt;OptionalHeader.SizeOfHeaders
+</code></pre>
+
+<p>The rest of the sections can be easily copied by looping over the section info present in the FileHeader header:</p>
+
+<pre><code>PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNTHeader);
+for(int i = 0; i &lt; pNTHeader-&gt;FileHeader.NumberOfSections; i++, pSection++)
+    memcpy((PBYTE)baseDll + pSection-&gt;VirtualAddress, (PBYTE)baseAddress + pSection-&gt;PointerToRawData, pSection-&gt;SizeOfRawData);
+</code></pre>
+
+<p><strong><em>Relocation</em></strong></p>
+
+<p>If the MapViewOfFileEx function failed to map the file at lpBaseAddress and it was necessary to map the file to another address, then all the addresses in the code must be relocated. This has been implemented in the way described in the already cited guide. Even if there are different types of relocation possible, according to the Matt Pietrek guide to the PE format:</p>
+
+<blockquote>
+  <p>For PE files that run on Intel CPUs, you'll only see two types of relocations</p>
+</blockquote>
+
+<p>and those are <em>IMAGE_REL_BASED_ABSOLUTE</em> and <em>IMAGE_REL_BASED_HIGHLOW</em>.</p>
+
+<p><strong><em>Resolving imports</em></strong></p>
+
+<p>This one has been implemented almost the same way Bauch did. But there is one thing to say here, as it represent the <strong>second</strong> big problem I had to face. In Windows 7, Microsoft has decided to make a <a href="http://www.nirsoft.net/articles/windows_7_kernel_architecture_changes.html">total API code "refactoring"</a> due to the introduction (started in Vista) of the MinWin component. A lot of new DLLs named "api-ms-win-core-XXX" have been introduced, but all the functions exported by these DLLs do just one thing: returning TRUE. However, they are imported by other DLLs to indirectly access kernel32.dll functions: in fact, a lot of the APIs exported by kernel32 have been regrouped in categories and fakely exported by those DLLs. If one resolves the API address with the ones specified in the api-ms-win-core DLL, many APIs would just return TRUE. This problem is solved by redirecting this to kernel32.dll and using that one as the imported DLL. Maybe it's a bad solution, but it works.</p>
+
+<p>The <strong>third</strong> big problem was: "what happens if the loaded DLL is trying to import the LoadLibrary &amp; family function ?". If the module tries to use the original LoadLibrary with a DLL we already loaded, there would be two copies of the same DLL in memory. The same is true if the module wants to retrieve the address of a module I already loaded. This means that I had to fix the following functions imports:</p>
+
+<ul>
+<li>FreeLibrary</li>
+<li>GetModuleHandleA/W</li>
+<li>LoadLibraryA/W</li>
+<li>LoadLibraryExA/W</li>
+</ul>
+
+<p>They are resolved by returning the addresses of my versions. Obviously, if the module tries to load other modules by not using those functions, everything can happen. So, that's why I advice to use just this method to load DLLs and/or the original one and not mixing a lot of things together.</p>
+
+<p><strong><em>Protecting sections</em></strong></p>
+
+<p>Nothing special here, implemented in the Bauch way. Just calling the VirtualProtect function to apply the different protection values to the different sections.</p>
+
+<p><strong><em>Calling the entry point</em></strong></p>
+
+<p>Nothing special here as well. The entry point address is specified in</p>
+
+<pre><code>pNTHeader-&gt;OptionalHeader.AddressOfEntryPoint
+</code></pre>
+
+<p>so this part is done by just calling this address.</p>
+
+<p>Some flags from the original LoadLibraryEx have been implemented:</p>
+
+<ul>
+<li><strong>LOAD_LIBRARY_AS_DATAFILE</strong>: the system maps the file into the calling process' virtual address space, as if it wes a data file. Nothing is done to execute or prepare to execute the mapped file. (from MSDN)</li>
+<li><strong>DONT_RESOLVE_DLL_REFERENCES</strong>: if the executable module is a DLL, the system does not call DllMain for process and thread initialisation and termination. (from MSDN)</li>
+</ul>
+
+<p>I hope to have said it all. It has not been easy to implement almost everything. I am sure there are a lot of bugs here and there, but in the next post I'll describe the FreeLibrary implementation and I will insert the link to the github repository where I am hosting the code.</p>
+
+<p>Feel free to comment.</p>
+  </body>
+</html>
