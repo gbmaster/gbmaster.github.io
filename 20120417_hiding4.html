@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>On the road of hiding... PEB, PE format handling and DLL loading homemade APIs - last part &mdash; gb_master's /dev/null</title>
+  </head>
+  <body>
+<h1>On the road of hiding... PEB, PE format handling and DLL loading homemade APIs - last part</h1>
+
+<h2>17-04-2012, 11:05</h2>
+
+<p>This post is about the custom FreeLibrary implementation, which has probably been the easiest one.</p>
+
+<p>The first thing to do, is checking how many instances have been loaded of the specified modules; calling FreeLibrary doesn't necessarily mean that the module is going to be unloaded from memory: that's why a counter is used for each module, tracking how many times the module is loaded and decreased every time FreeLibrary is called. When this counter reaches 0, the module can be fully removed.</p>
+
+<p>If the counter reached 0, the flags the module has been loaded with should be checked: if it was loaded with LOAD_LIBRARY_AS_DATAFILE or DONT_RESOLVE_DLL_REFERENCES, then it is not required to call the DllMain function for detaching, as the code has not been initialized and the dependencies resolved. Otherwise, the first thing to do is calling the DllMain with the <em>DLL_PROCESS_DETACH</em> flag. Now it is possible to unload all the dependencies (obviously this step can be skipped if the module has been loaded with DONT_RESOLVE_DLL_REFERENCES).</p>
+
+<p>As all the modules loaded as a dependency of another module are stored in a list inside the library, it is simple to recursively unload them.</p>
+
+<p>Now that the dependencies have been unloaded, it is possible to completely remove the module from memory by calling the <em>UnmapViewOfFile</em> API.</p>
+
+<p>Well, I think that the custom implementation of those APIs is now "complete". The source code is available on <a href="https://github.com/gbmaster/loadLibrary">GitHub</a>: for sure it is buggy and lacking of some features, but, for now, it seems to work. Please notify me each bug or propose new features/patch. I really hope to not have been boring in this short series. By now, I don't know which one will be the next topic, but there surely will be one.</p>
+
+<p>Catch ya soon.</p>
+  </body>
+</html>
