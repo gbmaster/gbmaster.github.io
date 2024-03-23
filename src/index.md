@@ -12,4 +12,5 @@ gb_master's /dev/null
 * [On the road of hiding... PEB, PE format handling and DLL loading homemade APIs - last part](20120417_hiding4.html)
 * [Crabs, still a terror for the bitmaps](20121021_crabs.html)
 * [Botnets surrounding us: an initial focus on Kad](20130505_botnet1.html)
+* [Botnets surrounding us: sending KADEMLIA2\_BOOTSTRAP\_REQ, KADEMLIA2\_HELLO\_REQ and their strict cousins](20130616_botnet2.html)
 
