@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Botnets surrounding us: performing requests, sending out KADEMLIA2_REQ and asking contact, where art thou?" &mdash; gb_master's /dev/null</title>
+  </head>
+  <body>
+<h1>Botnets surrounding us: performing requests, sending out KADEMLIA2_REQ and asking contact, where art thou?"</h1>
+
+<h2>23-11-2013, 19:37</h2>
+
+<p>"Are we there yet?" I'd say no. The journey to have a basic botnet running is still pretty long, but the enthusiasm is big enough to cover it all.</p>
+
+<p>The next major step is understanding how the lookup process works: the concept behind it is that, even if a client doesn't know all the other peers in the Kad network, it is still be able to find any other Kad client.</p>
+
+<p>Let's start with the definition of the KADEMLIA2_REQ/S messages:</p>
+
+<p><strong>KADEMLIA2_REQ (opcode 0x21)</strong></p>
+
+<ul>
+<li><strong>unsigned int 8-bit</strong>: Kad packet identifier</li>
+<li><strong>unsigned int 8-bit</strong>: KADEMLIA2_REQ opcode</li>
+<li><strong>unsigned int 8-bit</strong>: contacts count</li>
+<li><strong>unsigned int 128-bit</strong>: target ID</li>
+<li><strong>unsigned int 128-bit</strong>: local contact ID</li>
+</ul>
+
+<p>33 bytes long, this message is sent to know information about the target ID specified in the message: the maximum number of results that can be returned is specified in the message itself. The target ID can be the client ID of a peer or the hash value of <em>sources</em>, <em>keywords</em> and <em>notes</em>. Looking for a source means looking for the MD4 hash of a file. Looking for keywords is a search based on file names: each filename is split into several keywords and published into the Kad network. The search is then performed on the MD4 of the keyword. A note is a comment in the file, and it will be also identified with the source ID.</p>
+
+<p>The different targets are the following, each one associated to a different number of desired contacts in the reply:</p>
+
+<ul>
+<li><strong>FIND_NODE</strong> (11 contacts requested): <em>NODE</em>, <em>NODECOMPLETE</em>, <em>NODESPECIAL</em>, <em>NODEFWCHECKUDP</em></li>
+<li><strong>FIND_VALUE</strong> (2 contacts requested): <em>FILE</em>, <em>KEYWORD</em>, <em>FINDSOURCE</em>, <em>NOTES</em></li>
+<li><strong>STORE</strong> (4 contacts required): <em>FINDBUDDY</em>, <em>STOREFILE</em>, <em>STOREKEYWORD</em>, <em>STORENOTES</em></li>
+</ul>
+
+<p>In short, if a contact wants to be closer to a target, it selects the 50 different closest-to-the-target contacts in its routing table and sends a request to the three closest ones with a contact type lower than 4. When one of these contacts receives the requests, a search in the routing table is performed in order to find the closest-to-the-target contacts stored with contact type lower than 3 (the quantity is the one specified in the message).</p>
+
+<p><strong>KADEMLIA2_RES (opcode 0x29)</strong></p>
+
+<ul>
+<li><strong>unsigned int 8-bit</strong>: Kad packet identifier</li>
+<li><strong>unsigned int 8-bit</strong>: KADEMLIA2_RES opcode</li>
+<li><strong>unsigned int 128-bit</strong>: target ID</li>
+<li><strong>unsigned int 8-bit</strong>: contacts count</li>
+<li><strong>unsigned int 128-bit</strong>: contact's contact ID</li>
+<li><strong>unsigned int 32-bit</strong>: contact's IP address</li>
+<li><strong>unsigned int 16-bit</strong>: contact's UDP port</li>
+<li><strong>unsigned int 16-bit</strong>: contact's TCP port</li>
+<li><strong>unsigned int 8-bit</strong>: contact's version</li>
+<li>...</li>
+</ul>
+
+<p>When the message is received, all the previously-unknown contacts are added to the routing table. If a FIND_NODE search was performed, the search stops here, otherwise all the received contacts are added to the list of contactable ones and search goes on.</p>
+
+<p>For botnet purposes, it's not needed to go further with the search process, as only KADEMLIA2_REQ/S seem to be required for it. I'd say we can start the rock'n'roll (but I'll do some code cleaning before).</p>
+  </body>
+</html>

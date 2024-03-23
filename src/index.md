@@ -13,4 +13,5 @@ gb_master's /dev/null
 * [Crabs, still a terror for the bitmaps](20121021_crabs.html)
 * [Botnets surrounding us: an initial focus on Kad](20130505_botnet1.html)
 * [Botnets surrounding us: sending KADEMLIA2\_BOOTSTRAP\_REQ, KADEMLIA2\_HELLO\_REQ and their strict cousins](20130616_botnet2.html)
+* [Botnets surrounding us: performing requests, sending out KADEMLIA2\_REQ and asking contact, where art thou?"](20131123_botnet3.html)
 
